@@ -99,15 +99,31 @@ test_image "selenoid/firefox" $tag
 docker tag "selenoid/firefox:$tag" "selenoid/vnc_firefox:$tag"
 docker tag "selenoid/firefox:$tag" "selenoid/vnc:firefox_$tag"
 
-read -p "Push?" yn
-if [ "$yn" == "y" ]; then
-	docker push "selenoid/dev_firefox:"$tag
-	if [ "$method" == "firefox/apt" ]; then
-	    docker push "selenoid/dev_firefox_full:"$tag
+push_image(){
+    img_tag="$1"
+    if [ -n "$DOCKER_REGISTRY" ]; then
+        docker tag "$img_tag" "$DOCKER_REGISTRY$img_tag"
+        img_tag="$DOCKER_REGISTRY$img_tag"
     fi
-	docker push "selenoid/firefox:$tag"
+    docker push "$img_tag"
+}
+
+yn=""
+if [ -z "$PUSH_ALL" ]; then
+    read -p "Push all ? (y,n,vnc)" yn
+else
+    yn=$PUSH_ALL
+fi
+if [ "$yn" == "y" ]; then
+    push_image "selenoid/dev_firefox:"$tag
+    if [ "$method" == "firefox/apt" ]; then
+        push_image "selenoid/dev_firefox_full:"$tag
+    fi
+    push_image "selenoid/firefox:$tag"
     docker tag "selenoid/firefox:$tag" "selenoid/firefox:latest"
-    docker push "selenoid/firefox:latest"
-    docker push "selenoid/vnc:firefox_"$tag
-    docker push "selenoid/vnc_firefox:"$tag
+    push_image "selenoid/firefox:latest"
+fi
+if [ "$yn" == "vnc" -o "$yn" == "y" ]; then
+    push_image "selenoid/vnc:firefox_"$tag
+    push_image "selenoid/vnc_firefox:"$tag
 fi
