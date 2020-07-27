@@ -1,0 +1,10 @@
+{
+  "firefox": {
+    "default": "68.1",
+    "versions": {
+      "68.1": {
+        "image": ["/usr/bin/geckodriver"@@DRIVER_ARGS@@]
+      }
+    }
+  }
+}

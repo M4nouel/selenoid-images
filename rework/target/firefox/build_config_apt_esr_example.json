@@ -1,0 +1,14 @@
+{
+  "channel": "esr",
+  "browser_version": "68.11.0esr+build1-0ubuntu0.18.04.1",
+  "sel_server_version": "1.10.0",
+  "geckodriver_version": "0.24.0",
+  "docker_nested_build_project_real_path": "******",
+  "method": "apt",
+  "cleanup": "false",
+  "package": "firefox-esr",
+  "ppa": "ppa:mozillateam/ppa",
+  "tag_version": "68.1",
+  "runner": "selenoid",
+  "build_directory": "../target/firefox"
+}
