@@ -1,0 +1,106 @@
+ARG http_proxy={{ env("http_proxy") }}
+ARG https_proxy={{ env("https_proxy") }}
+
+{%+ if requires_java == "_java" -%}
+# JAVA LAYER
+FROM selenoid/base:6.0 AS java_base
+
+RUN \
+    apt-get update && \
+    apt-get install -y openjdk-8-jre-headless && \
+    apt-get clean && \
+    rm -Rf /tmp/*
+{%- endif %}
+
+
+# BROWSER LAYER
+FROM {{ "java_base" if requires_java == "_java" else "selenoid/base:6.0" }} AS dev
+
+ARG PACKAGE={{ package }}
+ARG VERSION={{ browser_version if method == "apt" else "noop" }}
+ARG PPA={{ ppa }}
+
+LABEL browser=$PACKAGE:$VERSION
+
+{%+ if method == "apt" -%}
+# APT install
+RUN  \
+        {%+ if cleanup %}rm -f /etc/apt/apt.conf.d/docker-clean && \{% endif %}
+        {% if ppa != "" -%}
+        apt-get update && \
+        apt-get install -y software-properties-common && \
+        apt-get update && \
+        add-apt-repository -y $PPA && \
+        {%- endif %}
+        apt-get update && \
+        apt-get -y --no-install-recommends install iproute2 libavcodec57 $PACKAGE=$VERSION && \
+        {%+ if package != "firefox" %}ln /usr/bin/$PACKAGE /usr/bin/firefox && \{% endif %}
+        firefox --version {%+ if cleanup %}&& \
+        rm -Rf /tmp/* && rm -Rf /var/lib/apt/lists/*{% endif %}
+
+{%- else -%}
+# LOCAL install
+COPY {{ browser_file_name }} .
+
+RUN  \
+        {%+ if cleanup %}rm -f /etc/apt/apt.conf.d/docker-clean && \{% endif %}
+        apt-get update && \
+        apt-get -y --no-install-recommends install iproute2 libavcodec57 && \
+        {% if "amd64" in browser_path -%}
+        apt-get -y install libgtk-3-0 libstartup-notification0 libdbus-glib-1-2 && \
+        {%- elif "i386" in browser_path -%}
+        dpkg --add-architecture i386 && \
+        apt-get -y install libc6:i386 libncurses5:i386 libstdc++6:i386 libgtk-3-0:i386 \
+            libasound2:i386 libdbus-glib-1-2:i386 libxt6:i386 libatomic1:i386 \
+            libcairo-gobject2:i386 libstartup-notification0:i386 libx11-xcb1:i386 && \
+        wget -O /tmp/flashplayer.tar.gz https://fpdownload.adobe.com/pub/flashplayer/pdc/32.0.0.387/flash_player_ppapi_linux.i386.tar.gz && \
+        tar xvzf /tmp/flashplayer.tar.gz --directory /tmp && \
+        cp /tmp/libpepflashplayer.so /usr/lib/flashplugin-installer/libflashplayer.so && \
+        {%- endif %}
+        dpkg -i firefox.deb && \
+        {%+ if package != "firefox" %}ln /usr/bin/$PACKAGE /usr/bin/firefox && \{% endif %}
+        firefox --version {%+ if cleanup %}&& \
+        rm -Rf /tmp/* && rm -Rf /var/lib/apt/lists/* && rm -f firefox*.deb{% endif %}
+{%- endif %}
+
+
+
+# DRIVER LAYER
+FROM dev AS final
+# FROM selenoid/dev_firefox:@@VERSION@@
+
+{% if runner == "selenoid" -%}
+LABEL selenoid={{ sel_server_version }}
+LABEL driver=geckodriver:{{ geckodriver_version }}
+{%- else -%}
+LABEL selenium={{ sel_server_version }}
+{%- endif %}
+
+{% if runner == "selenoid" -%}
+# SELENOID
+RUN wget -O - \
+    "https://github.com/mozilla/geckodriver/releases/download/v{{ geckodriver_version }}/geckodriver-v{{ geckodriver_version }}-linux64.tar.gz" \
+    | tar xzf - --directory /usr/bin/
+RUN wget -O /usr/bin/selenoid \
+    "https://github.com/aerokube/selenoid/releases/download/{{ sel_server_version }}/selenoid_linux_amd64" && \
+    chmod +x /usr/bin/selenoid
+
+COPY --chown=selenium:nogroup browsers.json /home/selenium/
+
+COPY selenoid_entrypoint.sh /entrypoint.sh
+
+{%- else -%}
+# SELENIUM
+COPY download_selenium_server.sh .
+
+RUN chmod +x download_selenium_server.sh && \
+    ./download_selenium_server.sh {{ sel_server_version }} && \
+    rm download_selenium_server.sh
+
+COPY selenium_entrypoint.sh /entrypoint.sh
+{%- endif %}
+
+USER selenium
+
+EXPOSE 4444
+ENTRYPOINT ["/entrypoint.sh"]
