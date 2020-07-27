@@ -1,0 +1,10 @@
+{
+  "firefox": {
+    "default": "{{ tag_version }}",
+    "versions": {
+      "{{ tag_version }}": {
+        "image": ["/usr/bin/geckodriver"@@DRIVER_ARGS@@]
+      }
+    }
+  }
+}
